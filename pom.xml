@@ -14,6 +14,15 @@
         <restassured.version>5.5.1</restassured.version>
         <junit.version>5.12.2</junit.version>
         <jackson.version>2.18.3</jackson.version>
+        <selenide.version>7.6.1</selenide.version>
+        <hamcrest.version>3.0</hamcrest.version>
+        <surefire.version>3.5.2</surefire.version>
+
+        <!-- по умолчанию запускаем все теги -->
+        <test.groups></test.groups>
+        <test.excluded.groups></test.excluded.groups>
+        <base.url>http://localhost:3000</base.url>
+        <selenide.headless>true</selenide.headless>
     </properties>
 
     <dependencies>
@@ -41,6 +50,18 @@
             <version>3.17.0</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.hamcrest</groupId>
+            <artifactId>hamcrest</artifactId>
+            <version>${hamcrest.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.codeborne</groupId>
+            <artifactId>selenide</artifactId>
+            <version>${selenide.version}</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -48,11 +69,44 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
-                <version>3.5.2</version>
+                <version>${surefire.version}</version>
                 <configuration>
                     <useSystemClassLoader>true</useSystemClassLoader>
+                    <groups>${test.groups}</groups>
+                    <excludedGroups>${test.excluded.groups}</excludedGroups>
+                    <systemPropertyVariables>
+                        <base.url>${base.url}</base.url>
+                        <selenide.headless>${selenide.headless}</selenide.headless>
+                    </systemPropertyVariables>
                 </configuration>
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>smoke</id>
+            <properties>
+                <test.groups>smoke</test.groups>
+            </properties>
+        </profile>
+        <profile>
+            <id>regression</id>
+            <properties>
+                <test.groups>regression</test.groups>
+            </properties>
+        </profile>
+        <profile>
+            <id>e2e</id>
+            <properties>
+                <test.groups>e2e</test.groups>
+            </properties>
+        </profile>
+        <profile>
+            <id>all</id>
+            <properties>
+                <test.groups>smoke | regression | e2e</test.groups>
+            </properties>
+        </profile>
+    </profiles>
 </project>

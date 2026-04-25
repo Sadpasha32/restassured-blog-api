@@ -1,537 +1,580 @@
 package ru.qa.blogapi.tests;
 
-import org.junit.jupiter.api.Disabled;
+import io.restassured.response.Response;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import ru.qa.blogapi.auth.AuthApiClient;
+import ru.qa.blogapi.auth.AuthSession;
 import ru.qa.blogapi.base.BaseAuthorizedApiTest;
+import ru.qa.blogapi.helpers.PostsApiClient;
+import ru.qa.blogapi.models.PostCreateRequest;
+import ru.qa.blogapi.models.UserRegistrationRequest;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.everyItem;
+import static org.hamcrest.Matchers.greaterThan;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.lessThanOrEqualTo;
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.notNullValue;
 
 class BlogApiHomeworkTest extends BaseAuthorizedApiTest {
 
+    // ---------- AUTH ----------
+
     @Test
-    @Disabled("Практика: реализовать самостоятельно")
-    @DisplayName("POST /api/auth/register -> should register user with valid required fields")
+    @Tag("smoke")
+    @DisplayName("POST /api/auth/register -> регистрирует пользователя с валидными полями")
     void shouldRegisterUserWithValidRequiredFields() {
-        // Что проверяем:
-        // Успешную регистрацию нового пользователя с валидными обязательными полями.
-        //
-        // Что подготовить:
-        // - уникальный email
-        // - валидный password
-        // - при желании firstName / lastName / nickname / birthDate / phone
-        //
-        // Что сделать:
-        // 1. Отправить POST /api/auth/register
-        // 2. Передать JSON body с валидными данными
-        //
-        // Что проверить:
-        // - status code = 200
-        // - body.status = "success"
-        // - body.message = "User registered successfully"
-        // - body.user.id не null
-        // - body.user.email совпадает с отправленным email
-        //
-        // На что обратить внимание:
-        // - email должен быть уникальным
-        // - phone и nickname тоже могут быть уникальными, если backend так валидирует
+        UserRegistrationRequest body = TestUserBuilder.valid();
+
+        given()
+                .spec(requestSpec)
+                .body(body)
+                .when()
+                .post("/api/auth/register")
+                .then()
+                .statusCode(200)
+                .body("status", equalTo("success"))
+                .body("message", equalTo("User registered successfully"))
+                .body("user.id", notNullValue())
+                .body("user.email", equalTo(body.getEmail()))
+                .body("user.firstName", equalTo(body.getFirstName()))
+                .body("user.lastName", equalTo(body.getLastName()))
+                .body("user.nickname", equalTo(body.getNickname()));
     }
 
     @Test
-    @Disabled("Практика: реализовать самостоятельно")
-    @DisplayName("POST /api/auth/register -> should return validation error for invalid email")
+    @Tag("regression")
+    @DisplayName("POST /api/auth/register -> 400 при невалидном email")
     void shouldReturnValidationErrorForInvalidEmailOnRegistration() {
-        // Что проверяем:
-        // Что регистрация не проходит с невалидным email.
-        //
-        // Что подготовить:
-        // - email в неверном формате, например "invalid-email"
-        // - валидный password
-        //
-        // Что сделать:
-        // 1. Отправить POST /api/auth/register с невалидным email
-        //
-        // Что проверить:
-        // - status code = 400
-        // - body.error.code = 400
-        // - body.error.message содержит информацию о невалидном email
-        //
-        // Дополнительно:
-        // - если backend возвращает details, можно проверить body.error.details.email
-        //
-        // На что обратить внимание:
-        // - не надо ожидать 401, потому что это не ошибка авторизации, а ошибка валидации данных
+        Map<String, Object> body = new HashMap<>();
+        body.put("email", "not-an-email");
+        body.put("password", "SecurePass123!");
+
+        given()
+                .spec(requestSpec)
+                .body(body)
+                .when()
+                .post("/api/auth/register")
+                .then()
+                .statusCode(400)
+                .body("error.code", equalTo(400))
+                .body("error.message", notNullValue());
     }
 
     @Test
-    @Disabled("Практика: реализовать самостоятельно")
-    @DisplayName("POST /api/login -> should login with valid credentials")
+    @Tag("smoke")
+    @DisplayName("POST /api/login -> успешный логин выдаёт access и refresh токены")
     void shouldLoginWithValidCredentials() {
-        // Что проверяем:
-        // Что можно залогиниться под существующим пользователем.
-        //
-        // Что подготовить:
-        // 1. Сначала зарегистрировать нового пользователя
-        // 2. Затем использовать его email и password для логина
-        //
-        // Что сделать:
-        // 1. POST /api/login
-        // 2. Передать:
-        //    - username = email
-        //    - password = пароль зарегистрированного пользователя
-        //
-        // Что проверить:
-        // - status code = 200
-        // - body.token не null
-        // - body.refresh_token не null
-        //
-        // На что обратить внимание:
-        // - в login используется поле username, а не email
-        // - лучше регистрировать нового пользователя прямо в тесте, чтобы тест был независимым
+        UserRegistrationRequest user = TestUserBuilder.valid();
+        registerUser(user);
+
+        given()
+                .spec(requestSpec)
+                .body(loginBody(user.getEmail(), user.getPassword()))
+                .when()
+                .post("/api/login")
+                .then()
+                .statusCode(200)
+                .body("token", notNullValue())
+                .body("refresh_token", notNullValue());
     }
 
     @Test
-    @Disabled("Практика: реализовать самостоятельно")
-    @DisplayName("POST /api/login -> should return unauthorized for wrong password")
+    @Tag("regression")
+    @DisplayName("POST /api/login -> 401 при неверном пароле")
     void shouldReturnUnauthorizedForWrongPassword() {
-        // Что проверяем:
-        // Что логин не проходит при неверном пароле.
-        //
-        // Что подготовить:
-        // 1. Зарегистрировать пользователя
-        // 2. В login передать корректный email, но неверный password
-        //
-        // Что сделать:
-        // 1. POST /api/login
-        //
-        // Что проверить:
-        // - status code = 401
-        // - body.error.code = 401
-        // - body.error.message сообщает об ошибке авторизации
-        //
-        // На что обратить внимание:
-        // - если backend возвращает другой текст ошибки, лучше проверять не весь message полностью,
-        //   а более устойчивую часть или просто наличие error
+        UserRegistrationRequest user = TestUserBuilder.valid();
+        registerUser(user);
+
+        // /api/login возвращает плоское тело {code,message} (не обёрнутое в error)
+        given()
+                .spec(requestSpec)
+                .body(loginBody(user.getEmail(), "WrongPass987!"))
+                .when()
+                .post("/api/login")
+                .then()
+                .statusCode(401)
+                .body("code", equalTo(401))
+                .body("message", notNullValue());
     }
 
     @Test
-    @Disabled("Практика: реализовать самостоятельно")
-    @DisplayName("POST /api/token/refresh -> should refresh access token by refresh token")
+    @Tag("smoke")
+    @DisplayName("POST /api/token/refresh -> возвращает новую пару токенов")
     void shouldRefreshAccessToken() {
-        // Что проверяем:
-        // Что по refresh_token можно получить новый access token.
-        //
-        // Что подготовить:
-        // 1. Зарегистрировать пользователя
-        // 2. Залогиниться и получить refresh_token
-        //
-        // Что сделать:
-        // 1. POST /api/token/refresh
-        // 2. Передать refresh_token в body
-        //
-        // Что проверить:
-        // - status code = 200
-        // - body.token не null
-        // - body.refresh_token не null
-        //
-        // Дополнительно:
-        // - можно проверить, что новый token не пустой
-        // - можно сравнить старый refresh token и новый, если backend действительно его ротирует
-        //
-        // На что обратить внимание:
-        // - не путать access token и refresh token
+        UserRegistrationRequest user = TestUserBuilder.valid();
+        registerUser(user);
+
+        Response loginResponse = given()
+                .spec(requestSpec)
+                .body(loginBody(user.getEmail(), user.getPassword()))
+                .when()
+                .post("/api/login")
+                .then()
+                .statusCode(200)
+                .extract()
+                .response();
+        String refreshToken = loginResponse.jsonPath().getString("refresh_token");
+
+        Map<String, Object> refreshBody = new HashMap<>();
+        refreshBody.put("refresh_token", refreshToken);
+
+        given()
+                .spec(requestSpec)
+                .body(refreshBody)
+                .when()
+                .post("/api/token/refresh")
+                .then()
+                .statusCode(200)
+                .body("token", notNullValue())
+                .body("refresh_token", notNullValue());
     }
 
+    // ---------- PROFILE ----------
+
     @Test
-    @Disabled("Практика: реализовать самостоятельно")
-    @DisplayName("GET /api/profile -> should return current user profile for authorized user")
+    @Tag("smoke")
+    @DisplayName("GET /api/profile -> возвращает профиль текущего пользователя")
     void shouldReturnCurrentUserProfile() {
-        // Что проверяем:
-        // Что авторизованный пользователь может получить свой текущий профиль.
-        //
-        // Что подготовить:
-        // Ничего отдельно не нужно:
-        // BaseAuthorizedApiTest уже создает авторизованную сессию и authorizedRequestSpec
-        //
-        // Что сделать:
-        // 1. GET /api/profile
-        // 2. Использовать authorizedRequestSpec
-        //
-        // Что проверить:
-        // - status code = 200
-        // - body.user не null
-        //
-        // Важно:
-        // - сначала лучше посмотреть реальный контракт /api/profile
-        // - не надо автоматически ожидать те же поля, что в /api/profile/{id}
-        // - если email там реально возвращается, можно проверить его
-        // - если не возвращается, ограничиться user/id/наличием объекта
+        // /api/profile реально возвращает поле username (а не email),
+        // схема в Swagger расходится с реальностью — проверяем именно username
+        given()
+                .spec(authorizedRequestSpec)
+                .when()
+                .get("/api/profile")
+                .then()
+                .statusCode(200)
+                .body("user", notNullValue())
+                .body("user.id", equalTo(authSession.getUserId()))
+                .body("user.username", equalTo(authSession.getEmail()));
     }
 
     @Test
-    @Disabled("Практика: реализовать самостоятельно")
-    @DisplayName("PUT /api/profile -> should update current user profile")
+    @Tag("regression")
+    @DisplayName("PUT /api/profile -> обновляет имя/фамилию/никнейм текущего пользователя")
     void shouldUpdateCurrentUserProfile() {
-        // Что проверяем:
-        // Что авторизованный пользователь может обновить свой профиль.
-        //
-        // Что подготовить:
-        // - новый firstName
-        // - новый lastName
-        // - новый nickname
-        // - при необходимости новый phone
-        //
-        // Что сделать:
-        // 1. PUT /api/profile
-        // 2. Передать JSON body с полями для обновления
-        //
-        // Что проверить:
-        // - status code = 200
-        // - body.status = "success"
-        // - body.user.firstName совпадает с новым значением
-        // - body.user.lastName совпадает с новым значением
-        //
-        // Дополнительно:
-        // - после PUT можно сделать GET /api/profile/{id}
-        //   и отдельно проверить, что изменения действительно сохранились
+        String suffix = RandomStringUtils.secure().nextAlphanumeric(6);
+        Map<String, Object> body = new HashMap<>();
+        body.put("firstName", "Updated" + suffix);
+        body.put("lastName", "User" + suffix);
+        body.put("nickname", "upd_" + suffix);
+
+        given()
+                .spec(authorizedRequestSpec)
+                .body(body)
+                .when()
+                .put("/api/profile")
+                .then()
+                .statusCode(200)
+                .body("status", equalTo("success"))
+                .body("user.firstName", equalTo(body.get("firstName")))
+                .body("user.lastName", equalTo(body.get("lastName")))
+                .body("user.nickname", equalTo(body.get("nickname")));
+
+        // verify side effect — данные действительно сохранились
+        given()
+                .spec(authorizedRequestSpec)
+                .pathParam("id", authSession.getUserId())
+                .when()
+                .get("/api/profile/{id}")
+                .then()
+                .statusCode(200)
+                .body("user.firstName", equalTo(body.get("firstName")))
+                .body("user.lastName", equalTo(body.get("lastName")))
+                .body("user.nickname", equalTo(body.get("nickname")));
     }
 
+    // ---------- POSTS: LISTING ----------
+
     @Test
-    @Disabled("Практика: реализовать самостоятельно")
-    @DisplayName("GET /api/posts -> should return paginated list of posts")
+    @Tag("regression")
+    @DisplayName("GET /api/posts -> возвращает страницу постов с метаданными пагинации")
     void shouldReturnPaginatedPostsList() {
-        // Что проверяем:
-        // Что список постов возвращается в пагинированном виде.
-        //
-        // Что сделать:
-        // 1. GET /api/posts?page=1&limit=10
-        //
-        // Что проверить:
-        // - status code = 200
-        // - body.items не null
-        // - body.totalItems не null
-        // - body.itemsPerPage = 10
-        // - body.page = 1
-        // - body.pages не null
-        //
-        // Дополнительно:
-        // - можно проверить, что размер items <= limit
-        //
-        // На что обратить внимание:
-        // - список может быть пустым, если в системе нет постов
-        // - для стабильности можно сначала создать 1-2 поста
+        // создаём пару постов, чтобы лента точно не была пустой
+        PostsApiClient posts = new PostsApiClient(authorizedRequestSpec);
+        posts.createPublishedPost("technology");
+        posts.createPublishedPost("technology");
+
+        given()
+                .spec(authorizedRequestSpec)
+                .queryParam("page", 1)
+                .queryParam("limit", 10)
+                .when()
+                .get("/api/posts")
+                .then()
+                .statusCode(200)
+                .body("items", notNullValue())
+                .body("totalItems", greaterThanOrEqualTo(1))
+                .body("itemsPerPage", equalTo(10))
+                .body("page", equalTo(1))
+                .body("pages", greaterThanOrEqualTo(1))
+                .body("items.size()", lessThanOrEqualTo(10));
     }
 
     @Test
-    @Disabled("Практика: реализовать самостоятельно")
-    @DisplayName("GET /api/posts -> should filter posts by category")
+    @Tag("regression")
+    @DisplayName("GET /api/posts?category=technology -> возвращает только посты выбранной категории")
     void shouldFilterPostsByCategory() {
-        // Что проверяем:
-        // Что posts можно отфильтровать по category.
-        //
-        // Что подготовить:
-        // 1. Создать хотя бы один пост с category = technology
-        // 2. Желательно создать еще один пост с другой категорией
-        //
-        // Что сделать:
-        // 1. GET /api/posts?category=technology
-        //
-        // Что проверить:
-        // - status code = 200
-        // - body.items не null
-        // - у каждого возвращенного элемента category = technology
-        //
-        // На что обратить внимание:
-        // - если данных нет, фильтр нечего будет проверять
-        // - лучше создать данные внутри теста или в его arrange части
+        PostsApiClient posts = new PostsApiClient(authorizedRequestSpec);
+        posts.createPublishedPost("technology");
+        posts.createPublishedPost("travel");
+
+        given()
+                .spec(authorizedRequestSpec)
+                .queryParam("category", "technology")
+                .queryParam("limit", 50)
+                .when()
+                .get("/api/posts")
+                .then()
+                .statusCode(200)
+                .body("items.category", everyItem(equalTo("technology")));
     }
 
+    // ---------- POSTS: CRUD ----------
+
     @Test
-    @Disabled("Практика: реализовать самостоятельно")
-    @DisplayName("POST /api/posts -> should create published post")
+    @Tag("smoke")
+    @DisplayName("POST /api/posts -> создаёт опубликованный пост от автора")
     void shouldCreatePublishedPost() {
-        // Что проверяем:
-        // Создание обычного опубликованного поста.
-        //
-        // Что подготовить:
-        // - title
-        // - body
-        // - description
-        // - category
-        // - isDraft = false
-        //
-        // Что сделать:
-        // 1. POST /api/posts под авторизованным пользователем
-        //
-        // Что проверить:
-        // - status code = 201
-        // - body.status = "success"
-        // - body.post.id не null
-        // - body.post.title совпадает с отправленным
-        // - body.post.isDraft = false
-        // - body.post.status = "published" если backend реально это возвращает
-        // - body.post.author.email совпадает с authSession.getEmail()
+        String suffix = RandomStringUtils.secure().nextAlphanumeric(6);
+        PostCreateRequest body = new PostCreateRequest(
+                "Published " + suffix,
+                "Published body " + suffix,
+                "Published desc " + suffix,
+                "technology",
+                false
+        );
+
+        given()
+                .spec(authorizedRequestSpec)
+                .body(body)
+                .when()
+                .post("/api/posts")
+                .then()
+                .statusCode(201)
+                .body("status", equalTo("success"))
+                .body("post.id", notNullValue())
+                .body("post.title", equalTo(body.getTitle()))
+                .body("post.isDraft", equalTo(false))
+                .body("post.status", equalTo("published"))
+                .body("post.author.email", equalTo(authSession.getEmail()));
     }
 
     @Test
-    @Disabled("Практика: реализовать самостоятельно")
-    @DisplayName("POST /api/posts -> should create draft post")
+    @Tag("regression")
+    @DisplayName("POST /api/posts -> создаёт черновик и он находится в /api/posts/my?drafts=true")
     void shouldCreateDraftPost() {
-        // Что проверяем:
-        // Создание черновика.
-        //
-        // Что подготовить:
-        // - валидный PostCreate body
-        // - isDraft = true
-        //
-        // Что сделать:
-        // 1. POST /api/posts
-        //
-        // Что проверить:
-        // - status code = 201
-        // - body.post.id не null
-        // - body.post.isDraft = true
-        // - body.post.status = "draft" если это поле реально приходит
-        //
-        // Дополнительно:
-        // - потом можно проверить, что этот пост появляется в /api/posts/my?drafts=true
+        String suffix = RandomStringUtils.secure().nextAlphanumeric(6);
+        PostCreateRequest body = new PostCreateRequest(
+                "Draft " + suffix,
+                "Draft body " + suffix,
+                "Draft desc " + suffix,
+                "personal_finance",
+                true
+        );
+
+        Integer postId = given()
+                .spec(authorizedRequestSpec)
+                .body(body)
+                .when()
+                .post("/api/posts")
+                .then()
+                .statusCode(201)
+                .body("post.isDraft", equalTo(true))
+                .body("post.status", equalTo("draft"))
+                .extract()
+                .jsonPath()
+                .getInt("post.id");
+
+        given()
+                .spec(authorizedRequestSpec)
+                .queryParam("drafts", true)
+                .when()
+                .get("/api/posts/my")
+                .then()
+                .statusCode(200)
+                .body("items.id", hasItem(postId));
     }
 
     @Test
-    @Disabled("Практика: реализовать самостоятельно")
-    @DisplayName("GET /api/posts/my -> should return only current user posts")
+    @Tag("regression")
+    @DisplayName("GET /api/posts/my -> возвращает только посты текущего пользователя")
     void shouldReturnOnlyCurrentUserPosts() {
-        // Что проверяем:
-        // Что /api/posts/my возвращает только посты текущего пользователя.
-        //
-        // Что подготовить:
-        // 1. Под текущим authSession создать 1-2 поста
-        //
-        // Что сделать:
-        // 1. GET /api/posts/my
-        //
-        // Что проверить:
-        // - status code = 200
-        // - body.items не null
-        // - у каждого поста author.email = authSession.getEmail()
-        //
-        // На что обратить внимание:
-        // - если в системе до этого уже есть другие посты, они здесь не должны вернуться
+        PostsApiClient posts = new PostsApiClient(authorizedRequestSpec);
+        posts.createPublishedPost("technology");
+        posts.createPublishedPost("travel");
+
+        given()
+                .spec(authorizedRequestSpec)
+                .queryParam("limit", 50)
+                .when()
+                .get("/api/posts/my")
+                .then()
+                .statusCode(200)
+                .body("items.author.email", everyItem(equalTo(authSession.getEmail())));
     }
 
     @Test
-    @Disabled("Практика: реализовать самостоятельно")
-    @DisplayName("GET /api/posts/feed -> should return posts from other users")
+    @Tag("e2e")
+    @DisplayName("GET /api/posts/feed -> возвращает посты других пользователей, не текущего")
     void shouldReturnFeedPosts() {
-        // Что проверяем:
-        // Что feed возвращает посты других пользователей, а не текущего.
-        //
-        // Что подготовить:
-        // 1. Создать пост от другого пользователя
-        // 2. При необходимости иметь пост от текущего пользователя для сравнения
-        //
-        // Что сделать:
-        // 1. GET /api/posts/feed
-        //
-        // Что проверить:
-        // - status code = 200
-        // - body.items не null
-        // - у возвращенных постов author.email != authSession.getEmail()
-        //
-        // На что обратить внимание:
-        // - для этого теста нужен второй пользователь
-        // - это хороший кейс на setup нескольких учеток
+        // создаём отдельного второго пользователя и его пост
+        AuthApiClient anotherClient = new AuthApiClient(requestSpec);
+        AuthSession otherSession = anotherClient.createAuthorizedSession();
+        new PostsApiClient(buildAuthSpecFor(otherSession.getAccessToken()))
+                .createPublishedPost("technology");
+
+        given()
+                .spec(authorizedRequestSpec)
+                .queryParam("limit", 50)
+                .when()
+                .get("/api/posts/feed")
+                .then()
+                .statusCode(200)
+                .body("items", notNullValue())
+                .body("items.author.email", everyItem(not(equalTo(authSession.getEmail()))))
+                .body("items.author.email", hasItem(otherSession.getEmail()));
     }
 
     @Test
-    @Disabled("Практика: реализовать самостоятельно")
-    @DisplayName("GET /api/posts/{id} -> should return single post by id")
+    @Tag("regression")
+    @DisplayName("GET /api/posts/{id} -> возвращает пост и блок statistics")
     void shouldReturnSinglePostById() {
-        // Что проверяем:
-        // Что можно получить конкретный пост по id.
-        //
-        // Что подготовить:
-        // 1. Создать пост
-        // 2. Сохранить его id
-        //
-        // Что сделать:
-        // 1. GET /api/posts/{id}
-        //
-        // Что проверить:
-        // - status code = 200
-        // - body.post.id совпадает с id созданного поста
-        // - body.post.title совпадает с title созданного поста
-        // - body.statistics присутствует, если backend реально его возвращает
+        Integer postId = new PostsApiClient(authorizedRequestSpec).createPublishedPost("technology");
+
+        given()
+                .spec(authorizedRequestSpec)
+                .pathParam("id", postId)
+                .when()
+                .get("/api/posts/{id}")
+                .then()
+                .statusCode(200)
+                .body("post.id", equalTo(postId))
+                .body("post.title", notNullValue())
+                .body("statistics.totalViews", notNullValue())
+                .body("statistics.todayViews", notNullValue());
     }
 
     @Test
-    @Disabled("Практика: реализовать самостоятельно")
-    @DisplayName("PUT /api/posts/{id} -> should update existing post")
+    @Tag("regression")
+    @DisplayName("PUT /api/posts/{id} -> автор может обновить свой пост")
     void shouldUpdateExistingPost() {
-        // Что проверяем:
-        // Что автор поста может обновить свой существующий пост.
-        //
-        // Что подготовить:
-        // 1. Создать пост
-        // 2. Сохранить его id
-        // 3. Подготовить новые поля, например новый title и description
-        //
-        // Что сделать:
-        // 1. PUT /api/posts/{id}
-        //
-        // Что проверить:
-        // - status code = 200
-        // - body.status = "success"
-        // - body.post.id = id исходного поста
-        // - body.post.title = новый title
-        // - body.post.description = новое description
-        //
-        // Дополнительно:
-        // - затем сделать GET /api/posts/{id} и перепроверить обновленные значения
+        Integer postId = new PostsApiClient(authorizedRequestSpec).createPublishedPost("technology");
+
+        String suffix = RandomStringUtils.secure().nextAlphanumeric(6);
+        Map<String, Object> update = new HashMap<>();
+        update.put("title", "Updated " + suffix);
+        update.put("description", "New description " + suffix);
+
+        given()
+                .spec(authorizedRequestSpec)
+                .pathParam("id", postId)
+                .body(update)
+                .when()
+                .put("/api/posts/{id}")
+                .then()
+                .statusCode(200)
+                .body("status", equalTo("success"))
+                .body("post.id", equalTo(postId))
+                .body("post.title", equalTo(update.get("title")))
+                .body("post.description", equalTo(update.get("description")));
+
+        given()
+                .spec(authorizedRequestSpec)
+                .pathParam("id", postId)
+                .when()
+                .get("/api/posts/{id}")
+                .then()
+                .statusCode(200)
+                .body("post.title", equalTo(update.get("title")))
+                .body("post.description", equalTo(update.get("description")));
     }
 
     @Test
-    @Disabled("Практика: реализовать самостоятельно")
-    @DisplayName("DELETE /api/posts/{id} -> should delete post")
+    @Tag("e2e")
+    @DisplayName("DELETE /api/posts/{id} -> удаляет пост, GET по тому же id возвращает 404")
     void shouldDeletePost() {
-        // Что проверяем:
-        // Что пользователь может удалить свой пост.
-        //
-        // Что подготовить:
-        // 1. Создать пост
-        // 2. Сохранить его id
-        //
-        // Что сделать:
-        // 1. DELETE /api/posts/{id}
-        //
-        // Что проверить:
-        // - status code = 200
-        // - body.status = "success"
-        // - body.message сообщает об успешном удалении
-        //
-        // Дополнительно:
-        // - после удаления сделать GET /api/posts/{id}
-        // - ожидать 404
+        Integer postId = new PostsApiClient(authorizedRequestSpec).createPublishedPost("technology");
+
+        given()
+                .spec(authorizedRequestSpec)
+                .pathParam("id", postId)
+                .when()
+                .delete("/api/posts/{id}")
+                .then()
+                .statusCode(200)
+                .body("status", equalTo("success"));
+
+        given()
+                .spec(authorizedRequestSpec)
+                .pathParam("id", postId)
+                .when()
+                .get("/api/posts/{id}")
+                .then()
+                .statusCode(404);
     }
 
-    @Test
-    @Disabled("Практика: реализовать самостоятельно")
-    @DisplayName("POST /api/posts/{id}/favorite -> should add post to favorites")
-    void shouldAddPostToFavorites() {
-        // Что проверяем:
-        // Что пользователь может добавить пост в избранное.
-        //
-        // Что подготовить:
-        // 1. Создать пост
-        // 2. Взять его id
-        //
-        // Что сделать:
-        // 1. POST /api/posts/{id}/favorite
-        // 2. Передать body: { "isFavorite": true }
-        //
-        // Что проверить:
-        // - status code = 200
-        // - body.status = "success"
-        // - body.isFavorite = true
-        //
-        // Дополнительно:
-        // - затем вызвать GET /api/posts/favorites
-        // - убедиться, что id этого поста там есть
-    }
+    // ---------- FAVORITES ----------
 
     @Test
-    @Disabled("Практика: реализовать самостоятельно")
-    @DisplayName("GET /api/posts/favorites -> should return favorite posts")
-    void shouldReturnFavoritePosts() {
-        // Что проверяем:
-        // Что список избранных постов возвращается корректно.
-        //
-        // Что подготовить:
-        // 1. Создать пост
-        // 2. Добавить его в favorites
-        //
-        // Что сделать:
-        // 1. GET /api/posts/favorites
-        //
-        // Что проверить:
-        // - status code = 200
-        // - body.items не null
-        // - в списке есть нужный post.id
-        // - при наличии поля isFavorite можно проверить, что оно true
+    @Tag("e2e")
+    @DisplayName("POST /api/posts/{id}/favorite -> добавляет в избранное и пост виден в /favorites")
+    void shouldAddPostToFavoritesAndSeeItInFavoritesList() {
+        // нужен пост от другого пользователя — нельзя добавить в избранное свой
+        AuthApiClient otherClient = new AuthApiClient(requestSpec);
+        AuthSession otherSession = otherClient.createAuthorizedSession();
+        Integer postId = new PostsApiClient(buildAuthSpecFor(otherSession.getAccessToken()))
+                .createPublishedPost("technology");
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("isFavorite", true);
+
+        given()
+                .spec(authorizedRequestSpec)
+                .pathParam("id", postId)
+                .body(body)
+                .when()
+                .post("/api/posts/{id}/favorite")
+                .then()
+                .statusCode(200)
+                .body("status", equalTo("success"))
+                .body("isFavorite", equalTo(true));
+
+        given()
+                .spec(authorizedRequestSpec)
+                .queryParam("limit", 50)
+                .when()
+                .get("/api/posts/favorites")
+                .then()
+                .statusCode(200)
+                .body("items.id", hasItem(postId));
     }
 
+    // ---------- FILES ----------
+
     @Test
-    @Disabled("Практика: реализовать самостоятельно")
-    @DisplayName("POST /api/files/upload -> should upload image file for post")
+    @Tag("regression")
+    @DisplayName("POST /api/files/upload -> загружает картинку и возвращает метаданные файла")
     void shouldUploadImageFileForPost() {
-        // Что проверяем:
-        // Что можно загрузить файл изображения.
-        //
-        // Что подготовить:
-        // - тестовый jpeg/png файл в resources
-        //
-        // Что сделать:
-        // 1. POST /api/files/upload
-        // 2. multipart/form-data
-        // 3. Передать:
-        //    - file
-        //    - type = "post-image" или "avatar"
-        //
-        // Что проверить:
-        // - status code = 200
-        // - body.id не null
-        // - body.url не null
-        // - body.mimeType соответствует ожидаемому типу
-        // - body.filename не null
-        //
-        // На что обратить внимание:
-        // - это не JSON body, а multipart
-        // - тут используется multiPart(...) в REST-Assured
+        byte[] png = TestImage.tinyPng();
+
+        given()
+                .spec(authorizedRequestSpec)
+                .contentType("multipart/form-data")
+                .multiPart("file", "tiny.png", png, "image/png")
+                .multiPart("type", "post-image")
+                .when()
+                .post("/api/files/upload")
+                .then()
+                .statusCode(200)
+                .body("id", notNullValue())
+                .body("url", notNullValue())
+                .body("filename", notNullValue())
+                .body("size", greaterThan(0))
+                .body("mimeType", equalTo("image/png"));
     }
 
     @Test
-    @Disabled("Практика: реализовать самостоятельно")
-    @DisplayName("GET /api/files/{id} -> should return uploaded file metadata")
+    @Tag("regression")
+    @DisplayName("GET /api/files/{id} -> возвращает метаданные ранее загруженного файла")
     void shouldReturnUploadedFileMetadata() {
-        // Что проверяем:
-        // Что по id загруженного файла можно получить его метаданные.
-        //
-        // Что подготовить:
-        // 1. Сначала загрузить файл через /api/files/upload
-        // 2. Сохранить fileId
-        //
-        // Что сделать:
-        // 1. GET /api/files/{id}
-        //
-        // Что проверить:
-        // - status code = 200
-        // - body.id = fileId
-        // - body.url не null
-        // - body.filename не null
-        // - body.size не null
-        // - body.mimeType не null
+        byte[] png = TestImage.tinyPng();
+
+        Integer fileId = given()
+                .spec(authorizedRequestSpec)
+                .contentType("multipart/form-data")
+                .multiPart("file", "tiny.png", png, "image/png")
+                .multiPart("type", "post-image")
+                .when()
+                .post("/api/files/upload")
+                .then()
+                .statusCode(200)
+                .extract()
+                .jsonPath()
+                .getInt("id");
+
+        given()
+                .spec(authorizedRequestSpec)
+                .pathParam("id", fileId)
+                .when()
+                .get("/api/files/{id}")
+                .then()
+                .statusCode(200)
+                .body("id", equalTo(fileId))
+                .body("filename", notNullValue())
+                .body("size", greaterThan(0))
+                .body("mimeType", notNullValue())
+                .body("url", notNullValue());
     }
 
+    // ---------- REPORT ----------
+
     @Test
-    @Disabled("Практика: реализовать самостоятельно")
-    @DisplayName("POST /api/profile/report/{id} -> should create report for user")
+    @Tag("e2e")
+    @DisplayName("POST /api/profile/report/{id} -> жалоба на другого пользователя успешно отправляется")
     void shouldCreateUserReport() {
-        // Что проверяем:
-        // Что можно отправить жалобу на пользователя.
-        //
-        // Что подготовить:
-        // 1. Создать второго пользователя
-        // 2. Получить его userId
-        //
-        // Что сделать:
-        // 1. POST /api/profile/report/{id}
-        // 2. Передать body с descriptionReport
-        //
-        // Что проверить:
-        // - status code = 200
-        // - body.status = "success"
-        // - body.message сообщает, что пользователь успешно зарепорчен
-        //
-        // Дополнительно:
-        // - можно потом вызвать GET /api/profile/report/{id}
-        //   и проверить, что count увеличился
+        AuthSession victim = new AuthApiClient(requestSpec).createAuthorizedSession();
+
+        Map<String, Object> reportBody = new HashMap<>();
+        reportBody.put("descriptionReport", "Spamming and abusive behaviour");
+
+        given()
+                .spec(authorizedRequestSpec)
+                .pathParam("id", victim.getUserId())
+                .body(reportBody)
+                .when()
+                .post("/api/profile/report/{id}")
+                .then()
+                .statusCode(200)
+                .body("status", equalTo("success"))
+                .body("message", notNullValue());
+
+        // GET /api/profile/report/{id} возвращает count, но на этом стенде он отдаёт фиксированный example
+        // из спеки — поэтому проверяем только, что эндпоинт жив и отдаёт целое число.
+        given()
+                .spec(authorizedRequestSpec)
+                .pathParam("id", victim.getUserId())
+                .when()
+                .get("/api/profile/report/{id}")
+                .then()
+                .statusCode(200)
+                .body("count", greaterThanOrEqualTo(0));
+    }
+
+    // ---------- helpers ----------
+
+    private Response registerUser(UserRegistrationRequest user) {
+        return given()
+                .spec(requestSpec)
+                .body(user)
+                .when()
+                .post("/api/auth/register")
+                .then()
+                .statusCode(200)
+                .extract()
+                .response();
+    }
+
+    private Map<String, Object> loginBody(String email, String password) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("username", email);
+        body.put("password", password);
+        return body;
+    }
+
+    private io.restassured.specification.RequestSpecification buildAuthSpecFor(String accessToken) {
+        return new io.restassured.builder.RequestSpecBuilder()
+                .addRequestSpecification(requestSpec)
+                .addHeader("Authorization", "Bearer " + accessToken)
+                .build();
     }
 }

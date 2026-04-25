@@ -1,0 +1,67 @@
+# Maven
+target/
+build/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Eclipse
+.classpath
+.project
+.settings/
+.metadata/
+bin/
+
+# VS Code
+.vscode/
+
+# NetBeans
+nbproject/private/
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# Logs
+*.log
+logs/
+
+# Selenide / Selenium artifacts
+build/reports/tests/
+build/reports/screenshots/
+screenshots/
+downloads/
+allure-results/
+allure-report/
+
+# Test reports
+**/surefire-reports/
+**/failsafe-reports/
+
+# Local secrets / overrides
+*.local
+.env
+.env.local
+src/test/resources/application-local.properties
+
+# Claude Code
+.claude/

@@ -60,6 +60,27 @@ base.url=http://localhost:3000
 mvn test -Dbase.url=http://localhost:3000
 ```
 
+## Теги и профили
+
+Тесты размечены тегами:
+
+- `@Tag("smoke")` — самая важная критическая логика
+- `@Tag("regression")` — расширенные кейсы и негативные сценарии
+- `@Tag("e2e")` — тяжёлые сценарии с несколькими пользователями / multi-step
+
+Запуск отдельных наборов через профили Maven:
+
+```bash
+mvn -P smoke test
+mvn -P regression test
+mvn -P e2e test
+mvn -P all test
+```
+
+CI: `.github/workflows/api-tests.yml`. Все job'ы крутятся на **self-hosted runner** (на твоей машине, где поднят стенд `localhost:3000`). На push/PR прогоняется smoke + regression, на push в main также UI + e2e. В `Actions -> Run workflow` можно вручную выбрать набор (smoke / regression / e2e / all) и base URL.
+
+Перед первым запуском подними self-hosted runner: `Settings -> Actions -> Runners -> New self-hosted runner` — GitHub даст готовый скрипт. После регистрации запусти `./run.sh` (или `run.cmd` на Windows) и держи его открытым на время прогона.
+
 ## Важно
 
 Хорошая практика — не писать register/login/refresh прямо внутри каждого теста.
