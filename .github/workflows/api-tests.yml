@@ -39,7 +39,7 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
           cache: maven
       - name: Run API smoke tests
-        run: mvn -B -P smoke test -Dtest='BlogApiHomeworkTest,AuthorizedApiExamplesTest' -Dbase.url=${{ env.DEFAULT_BASE_URL }}
+        run: mvn -B -P smoke test '-Dtest=BlogApiHomeworkTest,AuthorizedApiExamplesTest' '-Dbase.url=${{ env.DEFAULT_BASE_URL }}'
       - name: Upload surefire reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -60,7 +60,7 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
           cache: maven
       - name: Run API regression tests
-        run: mvn -B -P regression test -Dtest='BlogApiHomeworkTest,AuthorizedApiExamplesTest' -Dbase.url=${{ env.DEFAULT_BASE_URL }}
+        run: mvn -B -P regression test '-Dtest=BlogApiHomeworkTest,AuthorizedApiExamplesTest' '-Dbase.url=${{ env.DEFAULT_BASE_URL }}'
       - name: Upload surefire reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -81,7 +81,7 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
           cache: maven
       - name: Run E2E (API + UI) tests
-        run: mvn -B -P e2e test -Dbase.url=${{ env.DEFAULT_BASE_URL }} -Dselenide.headless=true
+        run: mvn -B -P e2e test '-Dbase.url=${{ env.DEFAULT_BASE_URL }}' '-Dselenide.headless=true'
       - name: Upload surefire reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -101,7 +101,7 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
           cache: maven
       - name: Run ${{ github.event.inputs.suite }}
-        run: mvn -B -P ${{ github.event.inputs.suite }} test -Dbase.url=${{ github.event.inputs.base_url }} -Dselenide.headless=true
+        run: mvn -B -P ${{ github.event.inputs.suite }} test '-Dbase.url=${{ github.event.inputs.base_url }}' '-Dselenide.headless=true'
       - name: Upload surefire reports
         if: always()
         uses: actions/upload-artifact@v4
