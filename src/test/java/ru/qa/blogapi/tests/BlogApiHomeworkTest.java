@@ -2,6 +2,7 @@ package ru.qa.blogapi.tests;
 
 import io.restassured.response.Response;
 import org.apache.commons.lang3.RandomStringUtils;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -16,6 +17,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.anyOf;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.greaterThan;
@@ -137,6 +139,18 @@ class BlogApiHomeworkTest extends BaseAuthorizedApiTest {
                 .statusCode(200)
                 .body("token", notNullValue())
                 .body("refresh_token", notNullValue());
+    }
+
+    @Test
+    @Tag("smoke")
+    @DisplayName("GET /api/profile без токена -> 401")
+    void shouldReturnUnauthorizedWhenAccessingProtectedEndpointWithoutToken() {
+        given()
+                .spec(requestSpec)
+                .when()
+                .get("/api/profile")
+                .then()
+                .statusCode(401);
     }
 
     // ---------- PROFILE ----------
@@ -423,6 +437,61 @@ class BlogApiHomeworkTest extends BaseAuthorizedApiTest {
                 .statusCode(404);
     }
 
+    @Test
+    @Tag("regression")
+    @DisplayName("POST /api/posts -> 400 без обязательных полей")
+    void shouldReturnValidationErrorWhenCreatingPostWithoutRequiredFields() {
+        Map<String, Object> emptyBody = new HashMap<>();
+
+        given()
+                .spec(authorizedRequestSpec)
+                .body(emptyBody)
+                .when()
+                .post("/api/posts")
+                .then()
+                .statusCode(400);
+    }
+
+    @Test
+    @Tag("regression")
+    @DisplayName("PUT /api/posts/{id} -> 403 если редактирует не автор")
+    void shouldRejectEditingPostByNonAuthor() {
+        Integer postId = new PostsApiClient(authorizedRequestSpec).createPublishedPost("technology");
+
+        AuthSession other = new AuthApiClient(requestSpec).createAuthorizedSession();
+        Map<String, Object> update = new HashMap<>();
+        update.put("title", "Hijacked title");
+
+        given()
+                .spec(buildAuthSpecFor(other.getAccessToken()))
+                .pathParam("id", postId)
+                .body(update)
+                .when()
+                .put("/api/posts/{id}")
+                .then()
+                .statusCode(403);
+    }
+
+    @Test
+    @Tag("regression")
+    @Disabled("KNOWN BACKEND BUG: DELETE /api/posts/{id} возвращает 200 для не-автора, " +
+            "т.е. любой авторизованный юзер может удалить чужой пост. " +
+            "Включить тест после фикса authorization-чека на стороне backend.")
+    @DisplayName("DELETE /api/posts/{id} -> 403 если удаляет не автор")
+    void shouldRejectDeletingPostByNonAuthor() {
+        Integer postId = new PostsApiClient(authorizedRequestSpec).createPublishedPost("technology");
+
+        AuthSession other = new AuthApiClient(requestSpec).createAuthorizedSession();
+
+        given()
+                .spec(buildAuthSpecFor(other.getAccessToken()))
+                .pathParam("id", postId)
+                .when()
+                .delete("/api/posts/{id}")
+                .then()
+                .statusCode(403);
+    }
+
     // ---------- FAVORITES ----------
 
     @Test
@@ -457,6 +526,30 @@ class BlogApiHomeworkTest extends BaseAuthorizedApiTest {
                 .then()
                 .statusCode(200)
                 .body("items.id", hasItem(postId));
+    }
+
+    @Test
+    @Tag("regression")
+    @Disabled("KNOWN BACKEND BUG: POST /api/posts/{id}/favorite разрешает добавить свой " +
+            "пост в избранное (возвращает 200 + isFavorite=true). Ожидается бизнес-правило " +
+            "'нельзя фейворить свои посты'. Включить тест после фикса.")
+    @DisplayName("POST /api/posts/{id}/favorite -> нельзя добавить свой пост в избранное")
+    void shouldRejectAddingOwnPostToFavorites() {
+        Integer ownPostId = new PostsApiClient(authorizedRequestSpec).createPublishedPost("technology");
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("isFavorite", true);
+
+        // конкретный код заранее не известен — backend может вернуть 400 (бизнес-валидация)
+        // или 403 (запрет действия), важно что не 200
+        given()
+                .spec(authorizedRequestSpec)
+                .pathParam("id", ownPostId)
+                .body(body)
+                .when()
+                .post("/api/posts/{id}/favorite")
+                .then()
+                .statusCode(anyOf(equalTo(400), equalTo(403)));
     }
 
     // ---------- FILES ----------
