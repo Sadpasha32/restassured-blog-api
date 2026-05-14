@@ -27,6 +27,7 @@ public class PostsApiClient {
                 .response();
     }
 
+
     public Integer createPublishedPost(String category) {
         String suffix = RandomStringUtils.secure().nextAlphanumeric(6);
         PostCreateRequest body = new PostCreateRequest(
